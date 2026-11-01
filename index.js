@@ -1,12 +1,14 @@
 import express from 'express'
 import { MongoClient } from 'mongodb';
+import cors from 'cors'
 import 'dotenv/config'
 const app = express()
 const PORT = 8000
 
 
 
-
+app.use(cors())
+app.use(express.json())
 const client = new MongoClient(process.env.MONGODB_URI);
 
 export async function connectToMongoDB() {
@@ -18,9 +20,17 @@ export async function connectToMongoDB() {
     console.dir(err);
   }
 }
-connectToMongoDB()
+const mongoClient=await connectToMongoDB()
+const db = mongoClient.db("booknook")
 
+const addBookCollection = db.collection('addbook')
 
+app.post('/books',async(req,res)=>{
+    const data = req.body
+    const result = await addBookCollection.insertOne(data)
+    console.log(result)
+    res.send(result)
+})
 
 app.get('/',(req,res)=>{
     res.send({message:'server is running'})
