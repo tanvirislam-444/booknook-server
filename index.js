@@ -36,11 +36,26 @@ app.get('/books',async(req,res)=>{
     const result = await addBookCollection.find().toArray()
     res.send(result)
 })
+
+app.get('/books/latest-books', async (req, res) => {
+  const result = await addBookCollection.find().sort({ createdAt: -1 }).limit(6).toArray();
+
+  res.send(result);
+})
+
+app.get('/my-books', async (req, res) => {
+  const email = req.query.email;
+  const result = await addBookCollection.find({ userEmail: email }).toArray();
+  res.send(result);
+});
+
 app.get('/books/:id',async(req,res)=>{
     const {id} = req.params
     const result = await addBookCollection.findOne({_id: new ObjectId(id)})
     res.send(result)
 })
+
+
 
 app.get('/',(req,res)=>{
     res.send({message:'server is running'})
