@@ -95,8 +95,17 @@ app.post('/borrows',async(req,res)=>{
         message: 'Book is currently unavailable'
       });
     }
-    const result = await borrowCollection.insertOne(data)
-    res.send(result)
+ const result = await borrowCollection.insertOne({
+  ...data,
+  status: "borrowed"
+});
+
+res.send({
+  success: true,
+  message: "Book borrowed successfully",
+  remainingCopies: book.totalCopies,
+  borrowId: result.insertedId
+});
 })
 
 
@@ -105,6 +114,25 @@ app.get('/borrows', async (req, res) => {
   const result = await borrowCollection.find({ userEmail: email }).toArray();
   res.send(result);
 });
+
+
+app.delete('/borrows/:id', async (req, res) => {
+      const { id } = req.params;
+    const borrow = await borrowCollection.findOne({
+      _id: new ObjectId(id)
+    });
+    const result = await borrowCollection.deleteOne({
+      _id: new ObjectId(id),
+      status: { $ne: "returned" }
+    });
+
+    await addBookCollection.updateOne(
+      { _id: new ObjectId(borrow.bookId) },
+      { $inc: { totalCopies: 1 } }
+    );
+    res.send(result)
+  })
+
 
 app.get('/',(req,res)=>{
     res.send({message:'server is running'})
