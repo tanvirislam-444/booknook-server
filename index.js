@@ -77,9 +77,34 @@ app.delete('/books/:id',async(req,res)=>{
 
 app.post('/borrows',async(req,res)=>{
     const data = req.body
+        const book = await addBookCollection.findOneAndUpdate(
+      {
+        _id: new ObjectId(data.bookId),
+        totalCopies: { $gt: 0 }
+      },
+      {
+        $inc: { totalCopies: -1 }
+      },
+      {
+        returnDocument: 'after'
+      }
+    );
+
+    if (!book) {
+      return res.status(400).json({
+        message: 'Book is currently unavailable'
+      });
+    }
     const result = await borrowCollection.insertOne(data)
     res.send(result)
 })
+
+
+app.get('/borrows', async (req, res) => {
+  const email = req.query.email;
+  const result = await borrowCollection.find({ userEmail: email }).toArray();
+  res.send(result);
+});
 
 app.get('/',(req,res)=>{
     res.send({message:'server is running'})
