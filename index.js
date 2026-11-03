@@ -24,6 +24,7 @@ const mongoClient=await connectToMongoDB()
 const db = mongoClient.db("booknook")
 
 const addBookCollection = db.collection('addbook')
+const borrowCollection = db.collection('borrowbooks')
 
 app.post('/books',async(req,res)=>{
     const data = req.body
@@ -72,6 +73,12 @@ app.delete('/books/:id',async(req,res)=>{
    
     )
     res.json(result)
+})
+
+app.post('/borrows',async(req,res)=>{
+    const data = req.body
+    const result = await borrowCollection.insertOne(data)
+    res.send(result)
 })
 
 app.get('/',(req,res)=>{
