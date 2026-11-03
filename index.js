@@ -65,6 +65,15 @@ app.patch('/books/:id',async(req,res)=>{
     res.json(result)
 })
 
+app.delete('/books/:id',async(req,res)=>{
+        const {id}= req.params
+    const result = await addBookCollection.deleteOne(
+        {_id:new ObjectId(id)},
+   
+    )
+    res.json(result)
+})
+
 app.get('/',(req,res)=>{
     res.send({message:'server is running'})
 })
