@@ -1,15 +1,13 @@
-import express from 'express'
-import { MongoClient, ObjectId } from 'mongodb';
-import cors from 'cors'
-import 'dotenv/config'
-import { createRemoteJWKSet, jwtVerify } from 'jose';
-const app = express()
-const PORT = 8000
+import express from "express";
+import { MongoClient, ObjectId } from "mongodb";
+import cors from "cors";
+import "dotenv/config";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+const app = express();
+const PORT = 8000;
 
-
-
-app.use(cors())
-app.use(express.json())
+app.use(cors());
+app.use(express.json());
 const client = new MongoClient(process.env.MONGODB_URI);
 
 export async function connectToMongoDB() {
@@ -21,152 +19,190 @@ export async function connectToMongoDB() {
     console.dir(err);
   }
 }
-const mongoClient=await connectToMongoDB()
-const db = mongoClient.db("booknook")
+const mongoClient = await connectToMongoDB();
+const db = mongoClient.db("booknook");
 
-const addBookCollection = db.collection('addbook')
-const borrowCollection = db.collection('borrowbooks')
+const addBookCollection = db.collection("addbook");
+const borrowCollection = db.collection("borrowbooks");
 
-const verifyToken = async(req,res,next)=>{
-    const authHeader = req.headers.authorization;
-   
-    if(!authHeader){
-        return res.status(401).send({msg:"Unauthorized"})
+// Prevent duplicate active borrowing
+await borrowCollection.createIndex(
+  { bookId: 1, userEmail: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: "borrowed",
+    },
+  },
+);
 
-    }
-     
-    const token =authHeader.split(" ")[1]
-   if(!token){
-    return res.status(401).send({msg:"Unauthorized"})
-   }
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
 
-   const JWKS = createRemoteJWKSet (new URL('http://localhost:3000/api/auth/jwks'))
+  if (!authHeader) {
+    return res.status(401).send({ msg: "Unauthorized" });
+  }
 
-   try{
-    const {payload} = await jwtVerify(token,JWKS)
-    next()
-   }catch (error){
-    return res.status(500).send({msg:"Server Error"})
-   }
-     
-}
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ msg: "Unauthorized" });
+  }
+
+  const JWKS = createRemoteJWKSet(
+    new URL("http://localhost:3000/api/auth/jwks"),
+  );
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    req.user = payload;
+    next();
+  } catch (error) {
+    return res.status(500).send({ msg: "Server Error" });
+  }
+};
 
 //verify done for add book
-app.post('/books',verifyToken,async(req,res)=>{
-    const data = req.body
-    const result = await addBookCollection.insertOne(data)
-    console.log(result)
-    res.send(result)
-})
+app.post("/books", verifyToken, async (req, res) => {
+  const data = req.body;
+  const result = await addBookCollection.insertOne(data);
+  console.log(result);
+  res.send(result);
+});
 
-app.get('/books',async(req,res)=>{
-    const result = await addBookCollection.find().toArray()
-    res.send(result)
-})
+app.get("/books", async (req, res) => {
+  const result = await addBookCollection.find().toArray();
+  res.send(result);
+});
 
-app.get('/books/latest-books', async (req, res) => {
-  const result = await addBookCollection.find().sort({ createdAt: -1 }).limit(6).toArray();
+app.get("/books/latest-books", async (req, res) => {
+  const result = await addBookCollection
+    .find()
+    .sort({ createdAt: -1 })
+    .limit(6)
+    .toArray();
 
   res.send(result);
-})
+});
 //my books verify done
-app.get('/my-books',verifyToken, async (req, res) => {
+app.get("/my-books", verifyToken, async (req, res) => {
   const email = req.query.email;
   const result = await addBookCollection.find({ userEmail: email }).toArray();
   res.send(result);
 });
- 
+
 //books details page verifyed
-app.get('/books/:id',verifyToken, 
-    async(req,res)=>{
-    const {id} = req.params
-    const result = await addBookCollection.findOne({_id: new ObjectId(id)})
-    res.send(result)
-})
+app.get("/books/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const result = await addBookCollection.findOne({ _id: new ObjectId(id) });
+  res.send(result);
+});
 //edit my book verifyed
-app.patch('/books/:id',verifyToken, async(req,res)=>{
-    const {id}= req.params
-    const data= req.body
-    const result = await addBookCollection.updateOne(
-        {_id:new ObjectId(id)},
-        {$set:data}
-    )
-    res.json(result)
-})
+app.patch("/books/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const data = req.body;
+  const result = await addBookCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: data },
+  );
+  res.json(result);
+});
 
 //delete my book verifyed
-app.delete('/books/:id',verifyToken,async(req,res)=>{
-        const {id}= req.params
-    const result = await addBookCollection.deleteOne(
-        {_id:new ObjectId(id)},
-   
-    )
-    res.json(result)
-})
+app.delete("/books/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const result = await addBookCollection.deleteOne({ _id: new ObjectId(id) });
+  res.json(result);
+});
 //my borrow books verifyed
-app.post('/borrows',verifyToken,async(req,res)=>{
-    const data = req.body
-        const book = await addBookCollection.findOneAndUpdate(
-      {
-        _id: new ObjectId(data.bookId),
-        totalCopies: { $gt: 0 }
-      },
-      {
-        $inc: { totalCopies: -1 }
-      },
-      {
-        returnDocument: 'after'
-      }
-    );
+app.post("/borrows", verifyToken, async (req, res) => {
+  const data = req.body;
+  const userEmail = req.user.email;
+  const userName = req.user.name;
+  const existingBorrow = await borrowCollection.findOne({
+    bookId: data.bookId,
+    userEmail,
+    status: "borrowed",
+  });
+  if (existingBorrow) {
+    return res.status(409).json({
+      success: false,
+      message: "You have already borrowed this book!",
+    });
+  }
 
-    if (!book) {
-      return res.status(400).json({
-        message: 'Book is currently unavailable'
-      });
-    }
- const result = await borrowCollection.insertOne({
-  ...data,
-  status: "borrowed"
+  const borrowData = {
+    bookId: data.bookId,
+    bookTitle: data.bookTitle,
+    bookImage: data.bookImage,
+    userName,
+    userEmail,
+    borrowDate: data.borrowDate,
+    returnDate: data.returnDate,
+    status: "borrowed",
+  };
+
+  const insertResult = await borrowCollection.insertOne(borrowData);
+
+  const book = await addBookCollection.findOneAndUpdate(
+    {
+      _id: new ObjectId(data.bookId),
+      totalCopies: { $gt: 0 },
+    },
+    {
+      $inc: { totalCopies: -1 },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+  if (!book) {
+    await borrowCollection.deleteOne({
+      _id: insertResult.insertedId,
+    });
+
+    return res.status(400).json({
+      success: false,
+      message: "Book is currently unavailable",
+    });
+  }
+  res.send({
+    success: true,
+    message: "Book borrowed successfully",
+    remainingCopies: book.totalCopies,
+    borrowId: insertResult.insertedId,
+  });
 });
 
-res.send({
-  success: true,
-  message: "Book borrowed successfully",
-  remainingCopies: book.totalCopies,
-  borrowId: result.insertedId
-});
-})
 
 //get my borrow books verifyed
-app.get('/borrows', async (req, res) => {
+app.get("/borrows", async (req, res) => {
   const email = req.query.email;
   const result = await borrowCollection.find({ userEmail: email }).toArray();
   res.send(result);
 });
 
 //remove my borrow books verifyed
-app.delete('/borrows/:id',verifyToken, async (req, res) => {
-      const { id } = req.params;
-    const borrow = await borrowCollection.findOne({
-      _id: new ObjectId(id)
-    });
-    const result = await borrowCollection.deleteOne({
-      _id: new ObjectId(id),
-      status: { $ne: "returned" }
-    });
+app.delete("/borrows/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const borrow = await borrowCollection.findOne({
+    _id: new ObjectId(id),
+  });
+  const result = await borrowCollection.deleteOne({
+    _id: new ObjectId(id),
+    status: { $ne: "returned" },
+  });
 
-    await addBookCollection.updateOne(
-      { _id: new ObjectId(borrow.bookId) },
-      { $inc: { totalCopies: 1 } }
-    );
-    res.send(result)
-  })
+  await addBookCollection.updateOne(
+    { _id: new ObjectId(borrow.bookId) },
+    { $inc: { totalCopies: 1 } },
+  );
+  res.send(result);
+});
 
+app.get("/", (req, res) => {
+  res.send({ message: "server is running" });
+});
 
-app.get('/',(req,res)=>{
-    res.send({message:'server is running'})
-})
-
-app.listen(PORT,()=>{
-console.log(`server is running port ${PORT}`)
-})
+app.listen(PORT, () => {
+  console.log(`server is running port ${PORT}`);
+});
